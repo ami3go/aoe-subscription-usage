@@ -1,0 +1,95 @@
+# Subscription Usage: OpenUsage-style usage view inside Agent of Empires.
+# Reads OpenUsage's local API and the CodexBar CLI (per-account windows + pace).
+# Schema reference: https://agent-of-empires.com/docs/api/plugin-api/
+
+id = "dev.hyunwook.usage"
+name = "Subscription Usage"
+version = "0.1.0"
+api_version = 13
+aoe_version = ">=1.17.0, <2.0.0"
+description = "Codex·Claude·Grok 등 구독 사용량을 막대·초기화 시각·소진 예상으로 보여주고, 세션 목록에 남은 사용량 배지를 붙입니다."
+
+# net: OpenUsage local API. process.spawn: CodexBar CLI. session.read: map sessions to providers for row badges.
+capabilities = ["runtime.worker", "net", "process.spawn", "session.read"]
+
+[[commands]]
+id = "refresh"
+title = "구독 사용량: 지금 새로고침"
+
+[[settings]]
+key = "openusage_url"
+label = "OpenUsage API"
+description = "비우면 OpenUsage를 쓰지 않습니다."
+type = "string"
+default = "http://127.0.0.1:6736/v1/usage"
+
+[[settings]]
+key = "codexbar_providers"
+label = "CodexBar로 읽을 서비스"
+description = "쉼표로 구분. 계정별 사용량과 소진 예상을 가져옵니다. 예: codex,claude,grok,antigravity"
+type = "string"
+default = "codex,claude,grok"
+
+[[settings]]
+key = "codexbar_refresh_secs"
+label = "CodexBar 갱신 주기(초)"
+type = "integer"
+default = 300
+min = 60
+max = 3600
+
+[[settings]]
+key = "refresh_secs"
+label = "화면 갱신 주기(초)"
+type = "integer"
+default = 30
+min = 10
+max = 3600
+
+[[settings]]
+key = "warn_percent"
+label = "주의 기준(%)"
+type = "integer"
+default = 75
+min = 1
+max = 100
+
+[[settings]]
+key = "danger_percent"
+label = "위험 기준(%)"
+type = "integer"
+default = 90
+min = 1
+max = 100
+
+[[settings]]
+key = "mask_accounts"
+label = "계정 이메일 일부 가리기"
+type = "boolean"
+default = true
+
+[[settings]]
+key = "session_badges"
+label = "세션 목록에 사용량 배지 표시"
+type = "boolean"
+default = true
+
+[[ui]]
+slot = "home-pane"
+id = "usage"
+
+[[ui]]
+slot = "status-bar"
+id = "usage"
+
+[[ui]]
+slot = "row-badge"
+id = "usage"
+
+[runtime]
+kind = "command"
+command = [".aoe-build/worker"]
+
+[[runtime.build]]
+command = ["sh", "-c", "mkdir -p .aoe-build && printf '#!/bin/sh\\nexec %s \"$(dirname \"$0\")/../worker.py\"\\n' \"$(command -v python3)\" > .aoe-build/worker && chmod +x .aoe-build/worker"]
+platforms = ["linux", "macos"]
