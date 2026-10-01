@@ -105,5 +105,40 @@ class Contract(unittest.TestCase):
                       replies)
 
 
+class StatusChips(unittest.TestCase):
+    def setUp(self) -> None:
+        self.model = worker.build_model(OPENUSAGE, CODEXBAR, mask_on=True)
+        self.calls: list[tuple[str, dict]] = []
+        self._orig = worker.call
+        worker.call = lambda method, params: self.calls.append((method, params)) or {"ok": True}
+
+    def tearDown(self) -> None:
+        worker.call = self._orig
+
+    def test_one_chip_per_service_in_fixed_order(self) -> None:
+        worker.push_status_chips(self.model, warn=75, danger=90)
+        sets = [p for m, p in self.calls if m == "ui.state.set"]
+        self.assertEqual(sorted(p["id"] for p in sets), ["a-codex", "b-claude", "c-grok"])
+        texts = {p["id"]: p["payload"]["text"] for p in sets}
+        self.assertEqual(texts["a-codex"], "Codex 49%")
+        removed = {p["id"] for m, p in self.calls if m == "ui.state.remove"}
+        self.assertEqual(removed, {"d-antigravity", "e-opencode", "z-none"})
+
+    def test_pace_risk_turns_green_chip_amber(self) -> None:
+        codex = next(m for m in self.model if m["id"] == "codex")
+        self.assertEqual(worker.chip_tone(codex, warn=75, danger=90), "warn")
+        self.assertIn("소진", worker.chip_tooltip(codex))
+
+    def test_chip_text_fits_without_truncation(self) -> None:
+        worker.push_status_chips(self.model, warn=75, danger=90)
+        for m, p in self.calls:
+            if m == "ui.state.set":
+                self.assertLessEqual(len(p["payload"]["text"]), 16)
+
+    def test_no_data_chip(self) -> None:
+        worker.push_status_chips([], warn=75, danger=90)
+        self.assertEqual([p["id"] for m, p in self.calls if m == "ui.state.set"], ["z-none"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -4,7 +4,7 @@
 
 id = "dev.hyunwook.usage"
 name = "Subscription Usage"
-version = "0.1.0"
+version = "0.2.0"
 api_version = 13
 aoe_version = ">=1.17.0, <2.0.0"
 description = "Codex·Claude·Grok 등 구독 사용량을 막대·초기화 시각·소진 예상으로 보여주고, 세션 목록에 남은 사용량 배지를 붙입니다."
@@ -78,9 +78,31 @@ default = true
 slot = "home-pane"
 id = "usage"
 
+# One status-bar chip per service so none is truncated (the web chip caps at 12rem).
+# Chips render in id order, so the prefix fixes Codex, Claude, Grok, Antigravity, OpenCode.
 [[ui]]
 slot = "status-bar"
-id = "usage"
+id = "a-codex"
+
+[[ui]]
+slot = "status-bar"
+id = "b-claude"
+
+[[ui]]
+slot = "status-bar"
+id = "c-grok"
+
+[[ui]]
+slot = "status-bar"
+id = "d-antigravity"
+
+[[ui]]
+slot = "status-bar"
+id = "e-opencode"
+
+[[ui]]
+slot = "status-bar"
+id = "z-none"
 
 [[ui]]
 slot = "row-badge"

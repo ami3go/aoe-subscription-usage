@@ -32,6 +32,9 @@ TOOL_PROVIDER = {"claude": "claude", "codex": "codex", "grok": "grok", "gemini":
                  "antigravity": "antigravity", "agy": "antigravity", "opencode": "opencode"}
 DISPLAY = {"codex": "Codex", "claude": "Claude", "grok": "Grok", "antigravity": "Antigravity",
            "opencode": "OpenCode", "cursor": "Cursor", "copilot": "Copilot"}
+STATUS_IDS = {"codex": "a-codex", "claude": "b-claude", "grok": "c-grok", "antigravity": "d-antigravity",
+              "opencode": "e-opencode"}
+NO_DATA_ID = "z-none"
 OU_LABEL = {"Session": "5시간 세션", "Weekly": "주간", "Weekly limit": "주간", "Daily": "일간", "Monthly": "월간"}
 
 _ids = itertools.count(1)
@@ -344,6 +347,49 @@ def risk_callout(model: list[dict[str, Any]], danger: int) -> dict[str, Any] | N
             "detail": " · ".join(dict.fromkeys(items))}
 
 
+def chip_tooltip(m: dict[str, Any]) -> str:
+    parts = []
+    for acc in m["accounts"]:
+        prefix = f"{acc['label']} " if acc["label"] else ""
+        for w in acc["windows"]:
+            reset = reset_text(w.get("resets_at"))
+            parts.append(f"{prefix}{w['label']} {w['pct']}%" + (f" ({reset})" if reset else ""))
+        pace = acc.get("pace") or {}
+        if pace.get("will_last") is False and pace.get("eta"):
+            parts.append(f"지금 속도면 약 {human_span(pace['eta'])} 후 소진")
+    plan = f"{m['name']} · {m['plan']}" if m.get("plan") else m["name"]
+    return plan + " — " + " / ".join(parts)
+
+
+def chip_tone(m: dict[str, Any], warn: int, danger: int) -> str:
+    t = tone(m["top"], warn, danger)
+    pace_risk = any((a.get("pace") or {}).get("will_last") is False for a in m["accounts"])
+    return "warn" if t == "success" and pace_risk else t
+
+
+def push_status_chips(model: list[dict[str, Any]], warn: int, danger: int) -> None:
+    shown = set()
+    for m in model:
+        chip = STATUS_IDS.get(m["id"])
+        if not chip:
+            continue
+        call("ui.state.set", {"slot": "status-bar", "id": chip, "payload": {
+            "text": f"{m['name']} {m['top']}%", "tone": chip_tone(m, warn, danger), "icon": "gauge",
+            "tooltip": chip_tooltip(m)}})
+        shown.add(chip)
+    if not shown:
+        call("ui.state.set", {"slot": "status-bar", "id": NO_DATA_ID, "payload": {
+            "text": "사용량 없음", "tone": "neutral", "icon": "gauge",
+            "tooltip": "OpenUsage 앱이나 CodexBar 로그인을 확인하세요"}})
+        shown.add(NO_DATA_ID)
+    for chip in [*STATUS_IDS.values(), NO_DATA_ID]:
+        if chip not in shown:
+            try:
+                call("ui.state.remove", {"slot": "status-bar", "id": chip})
+            except Exception:  # noqa: BLE001, S110
+                pass
+
+
 _badged: set[str] = set()
 
 
@@ -412,12 +458,7 @@ def refresh() -> int:
         "footer": {"text": f"OpenUsage {now:%H:%M:%S}{cb_part}", "value": f"최고 {worst}%",
                    "tone": tone(worst, warn, danger) if model else "neutral", "icon": "gauge"},
     }})
-    summary = " · ".join(f"{m['name']} {m['top']}%" for m in model) or "사용량 없음"
-    tip = " / ".join(f"{m['name']}: " + ", ".join(f"{w['label']} {w['pct']}%" for a in m["accounts"] for w in a["windows"])
-                     for m in model)
-    call("ui.state.set", {"slot": "status-bar", "id": "usage", "payload": {
-        "text": summary, "tone": tone(worst, warn, danger) if model else "neutral", "icon": "gauge",
-        "tooltip": tip or "OpenUsage/CodexBar 데이터 없음"}})
+    push_status_chips(model, warn, danger)
     push_row_badges(model, warn, danger, bool(setting("session_badges", True)))
     return max(10, int(setting("refresh_secs", 30)))
 

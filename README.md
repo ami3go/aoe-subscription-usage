@@ -9,7 +9,7 @@ An AoE plugin that shows subscription usage (Codex, Claude, Grok, …) on the da
 | 위치 | 내용 |
 |---|---|
 | 대시보드 첫 화면 패널 | 서비스별 요약, 한도(5시간 세션·주간·모델 전용 한도)마다 사용률 막대와 "10/4(일) 11:41 초기화 · 3일 4시간 남음", 지금 속도로 초기화 전에 소진되는지, 오늘·최근 30일 비용, 30일 사용 추이 |
-| 상태줄 | `Codex 49% · Claude 21% · Grok 11%`, 마우스를 올리면 한도별 수치 |
+| 상태줄 | 서비스마다 칸 하나씩 `Codex 49%` `Claude 21%` `Grok 11%`. 각자 사용률에 따라 색이 바뀌고, 지금 속도로 초기화 전에 소진될 것 같으면 주황색. 마우스를 올리면 한도별 수치, 초기화 시각, 소진 예상 |
 | 세션 목록 | 각 세션 행에 그 에이전트의 사용률 배지 (`tool`이 codex·claude·grok·gemini/antigravity·opencode인 세션) |
 
 한도에 가까워지거나 초기화 전에 소진될 것 같으면 패널 맨 위에 경고가 뜹니다.
@@ -48,6 +48,8 @@ aoe serve --restart   # 이미 떠 있는 데몬은 새 플러그인을 다시 �
 | `session_badges` | true | 세션 행 배지 표시 |
 
 ## 동작 방식
+
+상태줄 칸은 AoE 웹이 칸 하나를 12rem에서 자르기 때문에 서비스별로 나눴고, 칸 순서는 ID 순서를 따르므로 `a-codex`, `b-claude`처럼 앞 글자로 고정했습니다.
 
 워커는 AoE 플러그인 규약대로 stdin/stdout의 줄 단위 JSON-RPC로 호스트와 이야기합니다. `config.get`으로 설정을 읽고, `sessions.list`로 세션을 받아 배지를 붙이고, `ui.state.set`으로 `home-pane`·`status-bar`·`row-badge`를 갱신합니다. CodexBar는 별도 스레드에서 느린 주기로 돌리고, 화면은 마지막 값을 씁니다.
 
