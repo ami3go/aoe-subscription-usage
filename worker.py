@@ -24,10 +24,11 @@ import urllib.request
 from datetime import datetime, timezone
 from typing import Any
 
+from i18n import set_language, t as tr, weekday
+
 RPC_TIMEOUT = 10.0
 HTTP_TIMEOUT = 5.0
 CODEXBAR_TIMEOUT = 60
-WEEKDAY_KO = "월화수목금토일"
 TOOL_PROVIDER = {"claude": "claude", "codex": "codex", "grok": "grok", "gemini": "antigravity",
                  "antigravity": "antigravity", "agy": "antigravity", "opencode": "opencode"}
 DISPLAY = {"codex": "Codex", "claude": "Claude", "grok": "Grok", "antigravity": "Antigravity",
@@ -130,10 +131,10 @@ def human_span(seconds: float) -> str:
     hours, rem = divmod(rem, 3600)
     minutes = rem // 60
     if days:
-        return f"{days}일 {hours}시간" if hours else f"{days}일"
+        return tr("{p0}일 {p1}시간", p0=days, p1=hours) if hours else tr("{p0}일", p0=days)
     if hours:
-        return f"{hours}시간 {minutes}분" if minutes else f"{hours}시간"
-    return f"{minutes}분"
+        return tr("{p0}시간 {p1}분", p0=hours, p1=minutes) if minutes else tr("{p0}시간", p0=hours)
+    return tr("{p0}분", p0=minutes)
 
 
 def reset_text(iso: str | None) -> str:
@@ -141,22 +142,22 @@ def reset_text(iso: str | None) -> str:
     if not dt:
         return ""
     left = (dt - datetime.now(timezone.utc).astimezone()).total_seconds()
-    when = f"{dt.month}/{dt.day}({WEEKDAY_KO[dt.weekday()]}) {dt:%H:%M}"
-    return f"{when} 초기화 · {human_span(left)} 남음" if left > 0 else f"{when} 초기화됨"
+    when = f"{dt.month}/{dt.day}({weekday(dt.weekday())}) {dt:%H:%M}"
+    return tr("{p0} 초기화 · {p1} 남음", p0=when, p1=human_span(left)) if left > 0 else tr("{p0} 초기화됨", p0=when)
 
 
 def window_label(minutes: int | None, fallback: str = "") -> str:
     if minutes == 300:  # noqa: PLR2004
-        return "5시간 세션"
+        return tr("5시간 세션")
     if minutes == 10080:  # noqa: PLR2004
-        return "주간"
+        return tr("주간")
     if minutes == 1440:  # noqa: PLR2004
-        return "일간"
+        return tr("일간")
     if minutes and minutes % 1440 == 0:
-        return f"{minutes // 1440}일"
+        return tr("{p0}일", p0=minutes // 1440)
     if minutes and minutes % 60 == 0:
-        return f"{minutes // 60}시간"
-    return fallback or (f"{minutes}분" if minutes else "한도")
+        return tr("{p0}시간", p0=minutes // 60)
+    return fallback or (tr("{p0}분", p0=minutes) if minutes else tr("한도"))
 
 
 def mask(email: str | None, on: bool) -> str:
@@ -234,7 +235,7 @@ def build_model(ou: list[dict[str, Any]], cb: dict[str, list[dict[str, Any]]], m
         windows = []
         for ln in p.get("lines", []):
             if ln.get("type") == "progress" and ln.get("limit"):
-                windows.append({"label": OU_LABEL.get(ln.get("label", ""), ln.get("label", "")),
+                windows.append({"label": tr(OU_LABEL.get(ln.get("label", ""), ln.get("label", ""))),
                                 "pct": round(100 * float(ln.get("used", 0)) / float(ln["limit"])),
                                 "resets_at": ln.get("resetsAt")})
         trend = next((ln.get("points") for ln in p.get("lines", []) if ln.get("points")), None)
@@ -256,13 +257,13 @@ def build_model(ou: list[dict[str, Any]], cb: dict[str, list[dict[str, Any]]], m
             for extra in u.get("extraRateWindows") or []:
                 w = extra.get("window") or {}
                 if w.get("usedPercent") is not None:
-                    title = str(extra.get("title", "")).replace(" only", " 전용")
+                    title = str(extra.get("title", "")).replace(" only", tr(" 전용"))
                     windows.append({"key": extra.get("id"), "pct": round(float(w["usedPercent"])),
                                     "label": f"{window_label(w.get('windowMinutes'))} · {title}" if title else window_label(w.get("windowMinutes")),
                                     "resets_at": w.get("resetsAt")})
             ou_windows = [w for a in entry["accounts"] for w in a["windows"]]
             for i, w in enumerate(windows):  # CodexBar may omit windowMinutes; borrow OpenUsage's label
-                if w["label"] == "한도" and i < len(ou_windows):
+                if w["label"] == tr("한도") and i < len(ou_windows):
                     w["label"] = ou_windows[i]["label"]
             pace = None
             for key, pv in (r.get("pace") or {}).items():
@@ -289,7 +290,7 @@ def tone(pct: int, warn: int, danger: int) -> str:
 def split_cost(text: str | None) -> tuple[str, str]:
     if not text:
         return "", ""
-    parts = [x.strip() for x in text.replace("tokens", "토큰").split("·")]
+    parts = [x.strip() for x in text.replace("tokens", tr("토큰")).split("·")]
     return parts[0], (parts[1] if len(parts) > 1 else "")
 
 
@@ -298,24 +299,24 @@ def provider_section(m: dict[str, Any], warn: int, danger: int) -> dict[str, Any
     multi = len(m["accounts"]) > 1
     for acc in m["accounts"]:
         if multi or acc["label"]:
-            children.append({"kind": "row", "icon": "user", "label": acc["label"] or "계정", "mono": True,
+            children.append({"kind": "row", "icon": "user", "label": acc["label"] or tr("계정"), "mono": True,
                              "value": f"{max((w['pct'] for w in acc['windows']), default=0)}%",
                              "value_tone": tone(max((w["pct"] for w in acc["windows"]), default=0), warn, danger)})
         for w in acc["windows"]:
             t = tone(w["pct"], warn, danger)
-            children.append({"kind": "row", "label": w["label"], "value": f"{w['pct']}% 사용", "value_tone": t,
+            children.append({"kind": "row", "label": w["label"], "value": tr("{p0}% 사용", p0=w['pct']), "value_tone": t,
                              "sublabel": reset_text(w.get("resets_at"))})
             children.append({"kind": "bar", "segments": [
-                {"value": max(w["pct"], 0.5), "tone": t, "label": f"사용 {w['pct']}%"},
-                {"value": max(100 - w["pct"], 0), "tone": "neutral", "label": f"남음 {100 - w['pct']}%"}]})
+                {"value": max(w["pct"], 0.5), "tone": t, "label": tr("사용 {p0}%", p0=w['pct'])},
+                {"value": max(100 - w["pct"], 0), "tone": "neutral", "label": tr("남음 {p0}%", p0=100 - w['pct'])}]})
         pace = acc.get("pace")
         if pace and pace.get("will_last") is False and pace.get("eta"):
             children.append({"kind": "note", "tone": "warn",
-                             "text": f"지금 속도면 초기화 전에 소진 · 약 {human_span(pace['eta'])} 후"})
+                             "text": tr("지금 속도면 초기화 전에 소진 · 약 {p0} 후", p0=human_span(pace['eta']))})
         elif pace and pace.get("will_last") is True:
-            children.append({"kind": "note", "tone": "success", "text": "지금 속도면 초기화까지 여유 있음"})
+            children.append({"kind": "note", "tone": "success", "text": tr("지금 속도면 초기화까지 여유 있음")})
     cost_cards = []
-    for label, text in (("오늘", m.get("today")), ("최근 30일", m.get("month"))):
+    for label, text in ((tr("오늘"), m.get("today")), (tr("최근 30일"), m.get("month"))):
         value, sub = split_cost(text)
         if value:
             cost_cards.append({"kind": "row", "label": label, "value": value, "sublabel": sub, "mono": True})
@@ -325,7 +326,7 @@ def provider_section(m: dict[str, Any], warn: int, danger: int) -> dict[str, Any
     if trend:
         values = [float(p.get("value") or 0) for p in trend][-30:]
         if any(values):
-            children.append({"kind": "sparkline", "values": values, "tone": "info", "caption": "최근 30일 사용 추이"})
+            children.append({"kind": "sparkline", "values": values, "tone": "info", "caption": tr("최근 30일 사용 추이")})
     badges = [{"text": m["plan"]}] if m.get("plan") else []
     return {"kind": "section", "title": m["name"], "boxed": True, "value": f"{m['top']}%",
             "value_tone": tone(m["top"], warn, danger), "badges": badges, "collapsible": True, "children": children}
@@ -337,13 +338,13 @@ def risk_callout(model: list[dict[str, Any]], danger: int) -> dict[str, Any] | N
         for acc in m["accounts"]:
             pace = acc.get("pace") or {}
             if pace.get("will_last") is False and pace.get("eta"):
-                items.append(f"{m['name']}{(' ' + acc['label']) if acc['label'] else ''}: 약 {human_span(pace['eta'])} 후 소진 예상")
+                items.append(tr("{p0}{p1}: 약 {p2} 후 소진 예상", p0=m['name'], p1=' ' + acc['label'] if acc['label'] else '', p2=human_span(pace['eta'])))
             for w in acc["windows"]:
                 if w["pct"] >= danger:
                     items.append(f"{m['name']} {w['label']} {w['pct']}%")
     if not items:
         return None
-    return {"kind": "callout", "tone": "warn", "icon": "alert-triangle", "title": "주의가 필요한 구독이 있습니다",
+    return {"kind": "callout", "tone": "warn", "icon": "alert-triangle", "title": tr("주의가 필요한 구독이 있습니다"),
             "detail": " · ".join(dict.fromkeys(items))}
 
 
@@ -356,7 +357,7 @@ def chip_tooltip(m: dict[str, Any]) -> str:
             parts.append(f"{prefix}{w['label']} {w['pct']}%" + (f" ({reset})" if reset else ""))
         pace = acc.get("pace") or {}
         if pace.get("will_last") is False and pace.get("eta"):
-            parts.append(f"지금 속도면 약 {human_span(pace['eta'])} 후 소진")
+            parts.append(tr("지금 속도면 약 {p0} 후 소진", p0=human_span(pace['eta'])))
     plan = f"{m['name']} · {m['plan']}" if m.get("plan") else m["name"]
     return plan + " — " + " / ".join(parts)
 
@@ -379,8 +380,8 @@ def push_status_chips(model: list[dict[str, Any]], warn: int, danger: int) -> No
         shown.add(chip)
     if not shown:
         call("ui.state.set", {"slot": "status-bar", "id": NO_DATA_ID, "payload": {
-            "text": "사용량 없음", "tone": "neutral", "icon": "gauge",
-            "tooltip": "OpenUsage 앱이나 CodexBar 로그인을 확인하세요"}})
+            "text": tr("사용량 없음"), "tone": "neutral", "icon": "gauge",
+            "tooltip": tr("OpenUsage 앱이나 CodexBar 로그인을 확인하세요")}})
         shown.add(NO_DATA_ID)
     for chip in [*STATUS_IDS.values(), NO_DATA_ID]:
         if chip not in shown:
@@ -408,7 +409,7 @@ def push_row_badges(model: list[dict[str, Any]], warn: int, danger: int, enabled
             if not m:
                 continue
             payload = {"text": f"{m['top']}%", "tone": tone(m["top"], warn, danger), "icon": "gauge",
-                       "tooltip": f"{m['name']} 사용량 {m['top']}% (가장 높은 한도 기준)"}
+                       "tooltip": tr("{p0} 사용량 {p1}% (가장 높은 한도 기준)", p0=m['name'], p1=m['top'])}
             try:
                 call("ui.state.set", {"slot": "row-badge", "id": "usage", "session_id": s["id"], "payload": payload})
                 seen.add(s["id"])
@@ -423,6 +424,7 @@ def push_row_badges(model: list[dict[str, Any]], warn: int, danger: int, enabled
 
 
 def refresh() -> int:
+    set_language(setting("language", "ko"))
     warn = int(setting("warn_percent", 75))
     danger = int(setting("danger_percent", 90))
     ou, ou_err = fetch_openusage(str(setting("openusage_url", "http://127.0.0.1:6736/v1/usage")))
@@ -443,19 +445,19 @@ def refresh() -> int:
     blocks.extend(provider_section(m, warn, danger) for m in model)
     notes = []
     if ou_err:
-        notes.append(f"OpenUsage 연결 실패: {ou_err}")
-    notes.extend(f"CodexBar {p}: {e}" for p, e in cb_errors.items())
+        notes.append(tr("OpenUsage 연결 실패: {p0}", p0=ou_err))
+    notes.extend(f"CodexBar {p}: {tr(e)}" for p, e in cb_errors.items())
     if not model:
-        notes.append("표시할 사용량이 없습니다. OpenUsage 앱을 켜거나 CodexBar 로그인을 확인하세요.")
+        notes.append(tr("표시할 사용량이 없습니다. OpenUsage 앱을 켜거나 CodexBar 로그인을 확인하세요."))
     blocks.extend({"kind": "note", "tone": "warn", "text": n} for n in notes)
-    blocks.append({"kind": "action", "label": "지금 새로고침", "method": "refresh", "icon": "refresh-cw"})
+    blocks.append({"kind": "action", "label": tr("지금 새로고침"), "method": "refresh", "icon": "refresh-cw"})
 
     now = datetime.now(timezone.utc).astimezone()
     cb_part = f" · CodexBar {cb_at.astimezone():%H:%M}" if cb_at else ""
     worst = max((m["top"] for m in model), default=0)
     call("ui.state.set", {"slot": "home-pane", "id": "usage", "payload": {
-        "title": "구독 사용량", "icon": "gauge", "blocks": blocks,
-        "footer": {"text": f"OpenUsage {now:%H:%M:%S}{cb_part}", "value": f"최고 {worst}%",
+        "title": tr("구독 사용량"), "icon": "gauge", "blocks": blocks,
+        "footer": {"text": f"OpenUsage {now:%H:%M:%S}{cb_part}", "value": tr("최고 {p0}%", p0=worst),
                    "tone": tone(worst, warn, danger) if model else "neutral", "icon": "gauge"},
     }})
     push_status_chips(model, warn, danger)

@@ -2,7 +2,24 @@
 
 [Agent of Empires](https://github.com/agent-of-empires/agent-of-empires)(AoE) 대시보드에서 Codex·Claude·Grok 같은 구독의 남은 사용량을 보는 플러그인입니다. 에이전트를 여러 개 띄워 두면 어느 구독이 먼저 바닥나는지 알기 어려워서, [OpenUsage](https://github.com/robinebers/openusage)와 [CodexBar](https://github.com/steipete/CodexBar)가 이미 모아 둔 값을 AoE 화면에 붙였습니다.
 
-An AoE plugin that shows subscription usage (Codex, Claude, Grok, …) on the dashboard, using data from OpenUsage and the CodexBar CLI. UI text is Korean.
+An AoE plugin that shows subscription usage (Codex, Claude, Grok, …) on the dashboard, using data from OpenUsage and the CodexBar CLI. UI text supports Korean and English (Korean by default).
+
+
+## Language / 언어
+
+In **Settings → Plugins → Subscription Usage**, set **Language / 언어** to `en`
+for English or `ko` for Korean. Korean remains the default for existing
+installations. The worker applies changes on its next refresh; use the plugin's
+**Refresh now** command to refresh immediately.
+
+Settings labels, descriptions, and navigation titles are bilingual because AoE
+renders this metadata directly from the static manifest. The language setting
+controls plugin-generated panels, warnings, status messages, and tooltips.
+External server names, account names, command output, and provider data are kept
+as supplied. No external translation service is used.
+
+**Settings → Plugins → Subscription Usage → Language / 언어**에서 `en`(English)
+또는 `ko`(한국어)를 선택할 수 있습니다. 기존 설치의 기본값은 한국어입니다.
 
 ## 화면에 붙는 것
 
@@ -72,3 +89,13 @@ python3 -m unittest discover -s tests -v
 ## License
 
 MIT
+
+## Localization checks
+
+```sh
+python3 -m unittest discover -s tests -v
+```
+
+The tests cover English output, Korean compatibility, live language switches,
+format placeholders, and catalog coverage. English translations live in
+`locales/en.json`; source strings provide the Korean and unknown-key fallback.
